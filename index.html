@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espace Quest – Géométrie dans l'espace (GeoGebra 3D)</title>
+<script src="https://www.geogebra.org/apps/deployggb.js"></script>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--acc:#38bdf8;--ok:#22c55e;--ko:#ef4444;--txt:#e2e8f0;--gold:#facc15;--p1:#38bdf8;--p2:#f472b6}
+*{box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+body{margin:0;background:linear-gradient(160deg,#0f172a,#1e1b4b);color:var(--txt);min-height:100vh;display:flex;justify-content:center;padding:14px}
+#app{width:100%;max-width:900px}
+h1{text-align:center;color:var(--acc);margin:6px 0}
+.card{background:var(--card);border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 8px 24px #0006}
+.bar{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-weight:600;align-items:center}
+button{background:var(--acc);color:#0f172a;border:0;border-radius:10px;padding:10px 16px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s;margin:2px}
+button:hover{transform:translateY(-2px);filter:brightness(1.1)}
+button.sec{background:#334155;color:var(--txt)}
+button.on{outline:3px solid var(--gold)}
+.levels{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.lvl{text-align:left;background:#334155;color:var(--txt);padding:14px}
+.lvl small{display:block;font-weight:400;opacity:.8;margin-top:4px}
+.q{font-size:1.12rem;line-height:1.7;margin:10px 0}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.choices{grid-template-columns:1fr}}
+.choice{background:#334155;color:var(--txt)}
+.choice.ok{background:var(--ok);color:#052e16}
+.choice.ko{background:var(--ko);color:#fff}
+.fb{margin-top:12px;padding:12px;border-radius:10px;background:#0f172a;display:none;line-height:1.6}
+input[type=text]{width:100%;padding:12px;font-size:1.1rem;border-radius:10px;border:2px solid #475569;background:#0f172a;color:var(--txt)}
+input[type=text]:focus{outline:none;border-color:var(--acc)}
+#ggb{width:100%;height:380px;border-radius:12px;overflow:hidden;background:#fff;margin:8px 0}
+.prog{height:10px;background:#334155;border-radius:6px;overflow:hidden}
+.prog div{height:100%;background:linear-gradient(90deg,var(--acc),var(--ok));transition:.4s}
+.center{text-align:center}
+.badge{font-size:3rem}
+.timer{font-size:1.4rem;color:var(--gold)}
+.p1{color:var(--p1)}.p2{color:var(--p2)}
+.opts{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:8px 0}
+.step{color:var(--gold);font-weight:700}
+small.k{opacity:.7}
+.v{position:relative;display:inline-block;font-style:normal;white-space:nowrap}
+.v::after{content:"→";position:absolute;left:50%;top:-0.75em;transform:translateX(-50%);font-size:.85em;line-height:1}
+</style>
+</head>
+<body>
+<div id="app">
+<h1>🚀 Espace Quest</h1>
+<div id="screen"></div>
+</div>
+
+<script>
+/* ================= OUTILS ================= */
+function rnd(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+function rndNZ(a,b){var x;do{x=rnd(a,b);}while(x===0);return x;}
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=rnd(0,i);var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function vec(v){return '('+v.join(' ; ')+')';}
+function pt(n,p){return n+'('+p.join(' ; ')+')';}
+function dot(u,v){return u[0]*v[0]+u[1]*v[1]+u[2]*v[2];}
+function cross(u,v){return [u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];}
+function sub(b,a){return [b[0]-a[0],b[1]-a[1],b[2]-a[2]];}
+function rv(m){if(m===undefined)m=5;return [rnd(-m,m),rnd(-m,m),rnd(-m,m)];}
+function gcd(a,b){return b?gcd(b,a%b):Math.abs(a);}
+
+function term(c,s){
+  if(c===0)return '';
+  return (c<0?'- ':'+ ')+(Math.abs(c)===1?'':Math.abs(c))+s+' ';
+}
+function eq(n,d){
+  var first=(n[0]===1?'':(n[0]===-1?'-':n[0]))+'x ';
+  var s=first+term(n[1],'y')+term(n[2],'z')+(d<0?'- ':'+ ')+Math.abs(d)+' = 0';
+  return s.replace(/\s+/g,' ');
+}
+function sqrtTxt(n){
+  var k=1,m=n;
+  for(var i=Math.floor(Math.sqrt(n));i>1;i--){
+    if(n%(i*i)===0){k=i;m=n/(i*i);break;}
+  }
+  if(m===1)return ''+k;
+  return k===1?'√'+m:k+'√'+m;
+}
+function frac(a,b){
+  if(b<0){a=-a;b=-b;}
+  var g=gcd(a,b)||1;a/=g;b/=g;
+  return b===1?''+a:a+'/'+b;
+}
+
+/* Met une flèche au-dessus des vecteurs : AB, BD, AG, u, v, w, n, d ... */
+function vt(s){
+  /* 1) Vecteurs à deux lettres majuscules : AB, BD, BG, AG, AK, BE, AC... */
+  s=s.replace(/(^|[^A-Za-zÀ-ÿ])(A[BCDEGK]|B[DEGC]|AB|AC|AG|AK|BD|BE|BG|OA|OB|OC)(?![A-Za-z0-9])/g,
+    function(m,pre,v){return pre+'<span class="v">'+v+'</span>';});
+  /* 2) Vecteurs en minuscule suivis d'une parenthèse : u(…), v(…), w(…), n(…), d(…) */
+  s=s.replace(/(^|[\s,;:«])([uvwnd])(?=\s*\()/g,
+    function(m,pre,v){return pre+'<span class="v">'+v+'</span>';});
+  /* 3) Vecteurs en minuscule isolés dans des formules : u·v, n·AB, d·n, u∧v */
+  s=s.replace(/([uvwnd])(?=\s*[·∧])/g,'<span class="v">$1</span>');
+  s=s.replace(/([·∧]\s*)([uvwnd])(?![A-Za-z(])/g,'$1<span class="v">$2</span>');
+  return s;
+}
+
+/* ====== Analyse des réponses libres ====== */
+function parseNum(s){
+  s=String(s).toLowerCase().replace(/\s+/g,'').replace(/,/g,'.').replace(/−/g,'-')
+    .replace(/×|·/g,'*')
+    .replace(/√\(([^)]+)\)/g,'sqrt($1)')
+    .replace(/√(\d+(\.\d+)?)/g,'sqrt($1)')
+    .replace(/(\d)sqrt/g,'$1*sqrt')
+    .replace(/\)(\d)/g,')*$1')
+    .replace(/°/g,'');
+  if(!s||!/^[0-9+\-*\/().sqrt]*$/.test(s))return NaN;
+  try{
+    var f=new Function('sqrt','return ('+s+')');
+    var v=f(Math.sqrt);
+    return (typeof v==='number'&&isFinite(v))?v:NaN;
+  }catch(e){return NaN;}
+}
+function parseAnswer(s,type){
+  s=s.trim();
+  if(type==='bool'){
+    var t=s.toLowerCase();
+    if(/^(o|oui|vrai|yes)/.test(t))return 'oui';
+    if(/^(n|non|faux|no)/.test(t))return 'non';
+    return null;
+  }
+  if(type==='vec'){
+    var m=s.replace(/^[A-Za-zΩω]*\s*/,'').replace(/[()\[\]]/g,'').split(/[;|]/);
+    if(m.length!==3)return null;
+    var v=m.map(parseNum);
+    for(var i=0;i<3;i++){if(isNaN(v[i]))return null;}
+    return v;
+  }
+  if(type==='num'){
+    var x=parseNum(s);
+    return isNaN(x)?null:x;
+  }
+  return s;
+}
+function checkFree(q,s){
+  var a=q.ans;
+  if(!a)return false;
+  var u=parseAnswer(s,a.type);
+  if(u===null)return false;
+  if(a.type==='bool')return u===a.val;
+  if(a.type==='num')return Math.abs(u-a.val)<=0.011;
+  if(a.type==='vec'){
+    for(var i=0;i<3;i++){if(Math.abs(u[i]-a.val[i])>0.011)return false;}
+    return true;
+  }
+  return false;
+}
+
+/* =============== FABRIQUE DE QUESTION =============== */
+function mk(q,good,bad,expl,hint,o){
+  o=o||{};
+  var uniq=[];
+  for(var i=0;i<bad.length;i++){
+    if(bad[i]!==good&&uniq.indexOf(bad[i])<0)uniq.push(bad[i]);
+  }
+  uniq=uniq.slice(0,3);
+  var k=1;
+  while(uniq.length<3){uniq.push(good+' ('+(k++)+')');}
+  return {q:q,choices:shuffle([good].concat(uniq)),good:good,expl:expl,hint:hint,
+          scene:o.scene,ans:o.ans,freeHelp:o.freeHelp,q2:o.q2};
+}
+
+/* ================= GÉNÉRATEURS (niveaux 1-4) ================= */
+var GEN={
+1:[
+function(){
+  var A=rv(4),B=rv(4),g=sub(B,A);
+  return mk('Soit '+pt('A',A)+' et '+pt('B',B)+'. Coordonnées du vecteur AB ?',vec(g),
+    [vec(sub(A,B)),vec([A[0]+B[0],A[1]+B[1],A[2]+B[2]]),vec([g[0],g[1],-g[2]])],
+    'AB = (xB−xA ; yB−yA ; zB−zA) = '+vec(g)+'.','« arrivée − départ ».',
+    {scene:{kind:'free',arrow:true,pts:{A:A,B:B},seg:[['A','B']]},ans:{type:'vec',val:g},freeHelp:'Format : (x;y;z)'});
+},
+function(){
+  var A=rv(4).map(function(x){return 2*x;}),B=rv(4).map(function(x){return 2*x;});
+  var M=A.map(function(a,i){return (a+B[i])/2;});
+  return mk('Coordonnées du milieu I de [AB] avec '+pt('A',A)+' et '+pt('B',B)+' ?',vec(M),
+    [vec(A.map(function(a,i){return a+B[i];})),vec(sub(B,A)),vec(A.map(function(a,i){return (a-B[i])/2;}))],
+    'I = moyenne des coordonnées = '+vec(M)+'.','Moyenne des coordonnées.',
+    {scene:{kind:'free',pts:{A:A,B:B,I:M},seg:[['A','B']]},ans:{type:'vec',val:M},freeHelp:'Format : (x;y;z)'});
+},
+function(){
+  var A=rv(4),B=rv(4),d=sub(B,A),n=dot(d,d);
+  if(!n)return GEN[1][2]();
+  return mk('Distance AB avec '+pt('A',A)+' et '+pt('B',B)+' ? (valeur exacte)',sqrtTxt(n),
+    [sqrtTxt(n+rnd(1,6)),''+n,sqrtTxt(Math.abs(d[0]+d[1]+d[2])||7)],
+    'AB² = '+d[0]+'²+'+d[1]+'²+'+d[2]+'² = '+n+' ⇒ AB = '+sqrtTxt(n)+' ≈ '+Math.sqrt(n).toFixed(2)+'.',
+    'AB = √(Δx²+Δy²+Δz²).',
+    {scene:{kind:'free',pts:{A:A,B:B},seg:[['A','B']]},ans:{type:'num',val:Math.sqrt(n)},freeHelp:'Ex : 2√3 ou 3,46'});
+},
+function(){
+  var u=rv(3),k=rndNZ(-3,3),colin=Math.random()<0.5;
+  var t=colin?u.map(function(x){return k*x;}):[u[0]+1,u[1],u[2]];
+  var cr=cross(u,t),r=(cr[0]===0&&cr[1]===0&&cr[2]===0);
+  return mk('u'+vec(u)+' et v'+vec(t)+' sont-ils colinéaires ?',r?'Oui':'Non',
+    [r?'Non':'Oui','Seulement si k>0','On ne peut pas savoir'],
+    r?'Oui : v = k·u.':'Non : coordonnées non proportionnelles.','Cherche k tel que v = k·u.',
+    {ans:{type:'bool',val:r?'oui':'non'},freeHelp:'oui / non'});
+}
+],
+2:[
+function(){
+  var u=rv(4),v=rv(4),p=dot(u,v);
+  return mk('Calculer u·v pour u'+vec(u)+' et v'+vec(v)+'.',''+p,
+    [''+(p+rnd(1,4)),''+(p-rnd(1,4)),''+(-p||7)],
+    'u·v = '+u[0]+'×'+v[0]+' + '+u[1]+'×'+v[1]+' + '+u[2]+'×'+v[2]+' = '+p+'.','Somme des produits.',
+    {ans:{type:'num',val:p},freeHelp:'Un entier'});
+},
+function(){
+  var u,v,orth=Math.random()<0.5;
+  if(orth){v=[2,-1,0];u=[1,2,rnd(-3,3)];}
+  else{v=[rnd(1,3),rnd(1,3),rnd(1,3)];u=[rnd(1,3),rnd(1,3),rnd(1,3)];}
+  var p=dot(u,v);
+  return mk('u'+vec(u)+' et v'+vec(v)+' sont-ils orthogonaux ?',p===0?'Oui':'Non',
+    [p===0?'Non':'Oui','Colinéaires','Indéterminé'],
+    'u·v = '+p+(p===0?' = 0 : orthogonaux.':' ≠ 0 : non orthogonaux.'),'Orthogonaux ⇔ u·v=0.',
+    {ans:{type:'bool',val:p===0?'oui':'non'},freeHelp:'oui / non'});
+},
+function(){
+  var u=[rndNZ(-3,3),rnd(-3,3),rndNZ(1,3)],a=rndNZ(-3,3),b=rndNZ(-3,3);
+  var c=-(u[0]*a+u[1]*b),z=c/u[2],zt=frac(c,u[2]);
+  return mk('Quelle valeur de z rend w('+a+' ; '+b+' ; z) orthogonal à u'+vec(u)+' ?',zt,
+    [frac(-c,u[2]),''+c,frac(c+1,u[2])],
+    'w·u = '+(a*u[0]+b*u[1])+' + '+u[2]+'z = 0 ⇒ z = '+zt+'.','w·u = 0.',
+    {ans:{type:'num',val:z},freeHelp:'Entier ou fraction (ex : -2/3)'});
+},
+function(){
+  var u=rv(4),v=rv(4);
+  if(!dot(u,u)||!dot(v,v))return GEN[2][0]();
+  var c=dot(u,v)/Math.sqrt(dot(u,u)*dot(v,v));
+  var ang=Math.round(Math.acos(Math.max(-1,Math.min(1,c)))*180/Math.PI);
+  return mk('Angle (au degré près) entre u'+vec(u)+' et v'+vec(v)+' ?',ang+'°',
+    [((ang+15)%180)+'°',(Math.abs(90-ang)||45)+'°',(180-ang||60)+'°'],
+    'cos θ = u·v/(‖u‖‖v‖) ≈ '+c.toFixed(3)+' ⇒ θ ≈ '+ang+'°.','cos θ = u·v/(‖u‖‖v‖).',
+    {ans:{type:'num',val:ang},freeHelp:"En degrés, arrondi à l'unité"});
+}
+],
+3:[
+function(){
+  var n=rv(4);if(!dot(n,n))n[0]=1;
+  var A=rv(3),d=-dot(n,A);
+  return mk('Équation cartésienne du plan passant par '+pt('A',A)+' de normale n'+vec(n)+' :',eq(n,d),
+    [eq(n,d+rnd(1,4)),eq(n,-d||5),eq([n[1],n[0],n[2]],d)],
+    'd = −('+n[0]+'×'+A[0]+'+'+n[1]+'×'+A[1]+'+'+n[2]+'×'+A[2]+') = '+d+'.','(a,b,c)=n ; A donne d.',
+    {scene:{kind:'free',pts:{A:A},plane:{n:n,d:d}},ans:{type:'num',val:d},
+     freeHelp:'Donne uniquement la valeur de d dans ax+by+cz+d=0',
+     q2:'Plan passant par '+pt('A',A)+' de normale n'+vec(n)+' : équation ax+by+cz+d=0. Quelle est la valeur de d ?'});
+},
+function(){
+  var n=rv(4);if(!dot(n,n))n[1]=2;
+  n[2]=n[2]||1;
+  var d=rnd(-6,6),A=rv(4),P=A.slice();
+  if(Math.random()<0.5){
+    var z=-(n[0]*A[0]+n[1]*A[1]+d)/n[2];
+    if(Number.isInteger(z))P[2]=z;
+  }
+  var r=(dot(n,P)+d===0);
+  return mk(pt('M',P)+' appartient-il au plan '+eq(n,d)+' ?',r?'Oui':'Non',
+    [r?'Non':'Oui','Seulement si d=0','Seulement si n unitaire'],
+    n[0]+'×'+P[0]+'+'+n[1]+'×'+P[1]+'+'+n[2]+'×'+P[2]+'+'+d+' = '+(dot(n,P)+d)+'.','Remplace x,y,z.',
+    {scene:{kind:'free',pts:{M:P},plane:{n:n,d:d}},ans:{type:'bool',val:r?'oui':'non'},freeHelp:'oui / non'});
+},
+function(){
+  var A=rv(3),v=rv(3);if(!dot(v,v))v[0]=1;
+  var t=rnd(-2,3),M=A.map(function(a,i){return a+t*v[i];});
+  var txt='(d) : x='+A[0]+'+'+v[0]+'t, y='+A[1]+'+'+v[1]+'t, z='+A[2]+'+'+v[2]+'t.';
+  return mk(txt+' Quel point est sur (d) ?',pt('M',M),
+    [pt('M',[M[0]+1,M[1],M[2]]),pt('M',[M[0],M[1]-1,M[2]+1]),pt('M',[-M[0]||9,M[1],M[2]])],
+    'Pour t='+t+' : M='+vec(M)+'.','Essaie t='+t+'.',
+    {scene:{kind:'free',pts:{A:A},line:{A:A,v:v}},ans:{type:'vec',val:M},
+     freeHelp:'Donne le point pour t='+t+' : (x;y;z)',
+     q2:txt+' Donne le point de (d) pour t='+t+'.'});
+},
+function(){
+  var n=rv(3),v=rv(3);
+  if(!dot(n,n))n[2]=1;
+  if(!dot(v,v))v[0]=1;
+  var p=dot(n,v);
+  return mk('Droite de vecteur directeur d'+vec(v)+', plan de normale n'+vec(n)+' : position relative ?',
+    p===0?'Droite parallèle au plan (ou incluse)':'Droite sécante au plan',
+    [p===0?'Droite sécante au plan':'Droite parallèle au plan (ou incluse)','Droite orthogonale au plan','Indéterminé'],
+    'd·n = '+p+'. '+(p===0?'Nul : parallèle.':'Non nul : sécante.'),'Calcule d·n.',
+    {ans:{type:'bool',val:p===0?'oui':'non'},freeHelp:'oui = parallèle (ou incluse), non = sécante',
+     q2:'Droite de vecteur directeur d'+vec(v)+', plan de normale n'+vec(n)+'. La droite est-elle parallèle au plan (ou incluse) ?'});
+}
+],
+4:[
+function(){
+  var n=rv(3);if(!dot(n,n))n[0]=2;
+  var d=rnd(-6,6),A=rv(4),num=Math.abs(dot(n,A)+d),den=dot(n,n);
+  if(!num)return GEN[4][0]();
+  return mk('Distance de '+pt('A',A)+' au plan '+eq(n,d)+' :',den===1?''+num:num+'/√'+den,
+    [''+num,(num+rnd(1,3))+'/√'+den,num+'/'+den],
+    "d = |ax₀+by₀+cz₀+d|/√(a²+b²+c²) = "+num+'/√'+den+'.','Formule point-plan.',
+    {scene:{kind:'free',pts:{A:A},plane:{n:n,d:d}},ans:{type:'num',val:num/Math.sqrt(den)},
+     freeHelp:'Valeur exacte (5/√3) ou décimale (2,89)'});
+},
+function(){
+  var A=rv(3),n=rv(2);if(!dot(n,n))n[1]=1;
+  var k=rndNZ(-3,3),H=A.map(function(a,i){return a+k*n[i];});
+  return mk('H = A + k·n avec A'+vec(A)+', n'+vec(n)+' et k='+k+'. Coordonnées de H ?',vec(H),
+    [vec(A.map(function(a,i){return a-k*n[i];})),vec(n.map(function(x){return k*x;})),vec(A.map(function(a,i){return a+n[i];}))],
+    'H = '+vec(H)+'.','H = A + k·n.',
+    {ans:{type:'vec',val:H},freeHelp:'(x;y;z)'});
+},
+function(){
+  var r=rnd(2,6),c=rv(3);
+  return mk('Sphère de centre '+pt('Ω',c)+' et rayon '+r+' : quelle valeur à droite du « = » dans son équation ?',''+(r*r),
+    [''+r,''+(2*r),''+(r*r+1)],
+    '(x−a)²+(y−b)²+(z−c)² = r² = '+(r*r)+'.','r².',
+    {ans:{type:'num',val:r*r},freeHelp:'Un entier'});
+},
+function(){
+  var u=[rndNZ(-3,3),rnd(-3,3),rnd(-3,3)],v=[rnd(-3,3),rndNZ(-3,3),rnd(-3,3)],n=cross(u,v);
+  if(!dot(n,n))return GEN[4][3]();
+  return mk('Un vecteur normal au plan dirigé par u'+vec(u)+' et v'+vec(v)+' :',vec(n),
+    [vec([-n[0]+1,-n[1],-n[2]]),vec(u.map(function(x,i){return x+v[i];})),vec([u[0]*v[0],u[1]*v[1],u[2]*v[2]])],
+    'n = u∧v = '+vec(n)+'.','n·u = 0 et n·v = 0.',
+    {ans:{type:'vec',val:n},freeHelp:'(x;y;z) — le produit vectoriel u∧v'});
+}
+]};
+
+/* ================= NIVEAU 5 : BAC (cube ABCDEFGH) =================
+ Repère (A; AB, AD, AE) : A(0,0,0) B(1,0,0) D(0,1,0) E(0,0,1) */
+var CUBE={A:[0,0,0],B:[1,0,0],C:[1,1,0],D:[0,1,0],E:[0,0,1],F:[1,0,1],G:[1,1,1],H:[0,1,1]};
+function BAC(){var pool=[bacA,bacB,bacC];return pool[rnd(0,pool.length-1)]();}
+
+function bacA(){
+  var steps=[
+    {q:'Dans le repère (A ; AB, AD, AE), donner les coordonnées du vecteur BD.',type:'vec',val:[-1,1,0],expl:'B(1;0;0), D(0;1;0) ⇒ BD(−1;1;0).',hint:'D − B.',help:'(x;y;z)'},
+    {q:'Donner les coordonnées du vecteur BG.',type:'vec',val:[0,1,1],expl:'G(1;1;1) − B(1;0;0) = (0;1;1).',hint:'G − B.',help:'(x;y;z)'},
+    {q:'Le vecteur n(1 ; 1 ; −1) est-il normal au plan (BDG) ? (il faut n·BD = 0 et n·BG = 0)',type:'bool',val:'oui',expl:'n·BD = −1+1+0 = 0 et n·BG = 0+1−1 = 0 ⇒ oui.',hint:'Calcule les deux produits scalaires.',help:'oui / non'},
+    {q:'Une équation du plan (BDG) est x + y − z + d = 0. Quelle est la valeur de d ?',type:'num',val:-1,expl:'B(1;0;0) ∈ plan ⇒ 1 + d = 0 ⇒ d = −1.',hint:'Remplace B.',help:'Un entier'},
+    {q:'Calculer la distance du point A au plan (BDG). (valeur exacte ou décimale)',type:'num',val:1/Math.sqrt(3),expl:'d = |0+0−0−1|/√3 = 1/√3 = √3/3 ≈ 0,577.',hint:'|d|/√(a²+b²+c²).',help:'Ex : 1/√3 ou 0,58'}
+  ];
+  return {title:'Problème A – Le plan (BDG)',intro:"ABCDEFGH est un cube d'arête 1. On munit l'espace du repère orthonormé (A ; AB, AD, AE).",steps:steps,
+    scene:{kind:'cube',hl:['B','D','G']}};
+}
+function bacB(){
+  var steps=[
+    {q:'Donner les coordonnées du vecteur AG.',type:'vec',val:[1,1,1],expl:'G(1;1;1), A(0;0;0) ⇒ AG(1;1;1).',hint:'G − A.',help:'(x;y;z)'},
+    {q:'Calculer le produit scalaire AG · BD (avec BD(−1;1;0)).',type:'num',val:0,expl:'−1 + 1 + 0 = 0.',hint:'Somme des produits.',help:'Un entier'},
+    {q:'Calculer AG · BE (avec BE(−1;0;1)).',type:'num',val:0,expl:'−1 + 0 + 1 = 0.',hint:'Somme des produits.',help:'Un entier'},
+    {q:'La droite (AG) est-elle orthogonale au plan (BDE) ?',type:'bool',val:'oui',expl:'AG est orthogonal à BD et BE, deux vecteurs non colinéaires du plan (BDE) ⇒ (AG) ⟂ (BDE).',hint:'Orthogonal à deux vecteurs non colinéaires du plan.',help:'oui / non'},
+    {q:'Une équation de (BDE) est x + y + z + d = 0. Donner d.',type:'num',val:-1,expl:'B(1;0;0) ⇒ 1 + d = 0 ⇒ d = −1.',hint:'Remplace B.',help:'Un entier'}
+  ];
+  return {title:'Problème B – Diagonale (AG) et plan (BDE)',intro:"ABCDEFGH est un cube d'arête 1, repère orthonormé (A ; AB, AD, AE).",steps:steps,
+    scene:{kind:'cube',hl:['B','D','E'],line:{A:[0,0,0],v:[1,1,1]}}};
+}
+function bacC(){
+  var steps=[
+    {q:'La droite (AG) a pour représentation paramétrique (x ; y ; z) = (t ; t ; t). Quelles sont les coordonnées du milieu I de [BD] ?',type:'vec',val:[0.5,0.5,0],expl:'I = ((1+0)/2 ; (0+1)/2 ; 0) = (0,5 ; 0,5 ; 0).',hint:'Moyenne de B et D.',help:'(x;y;z), décimaux ou fractions OK'},
+    {q:'Le point K = (AG) ∩ (BDE) vérifie t+t+t−1 = 0. Quelle est la valeur de t ?',type:'num',val:1/3,expl:'3t = 1 ⇒ t = 1/3.',hint:'Résous 3t − 1 = 0.',help:'Fraction : 1/3'},
+    {q:'Donner les coordonnées de K.',type:'vec',val:[1/3,1/3,1/3],expl:'K(1/3 ; 1/3 ; 1/3).',hint:'Remplace t = 1/3.',help:'(1/3;1/3;1/3)'},
+    {q:'Calculer la distance AK. (valeur exacte ou décimale)',type:'num',val:Math.sqrt(3)/3,expl:'AK = √(3×(1/9)) = √3/3 ≈ 0,577.',hint:'AK² = 3×(1/3)².',help:'Ex : √3/3'},
+    {q:'Quel est le rapport AK/AG ?',type:'num',val:1/3,expl:'AG = √3, AK = √3/3 ⇒ AK/AG = 1/3.',hint:'AG = √3.',help:'Fraction : 1/3'}
+  ];
+  return {title:'Problème C – Intersection de (AG) et (BDE)',intro:"ABCDEFGH est un cube d'arête 1, repère orthonormé (A ; AB, AD, AE). Le plan (BDE) a pour équation x + y + z − 1 = 0.",steps:steps,
+    scene:{kind:'cube',hl:['B','D','E'],line:{A:[0,0,0],v:[1,1,1]},extra:{K:[1/3,1/3,1/3]}}};
+}
+
+/* ====== Niveau 6 : tétraèdre OABC ====== */
+function tetra(){
+  var a=rnd(1,4),b=rnd(1,4),c=rnd(1,4);
+  var A=[a,0,0],B=[0,b,0],C=[0,0,c],O=[0,0,0];
+  var V=a*b*c/6;
+  var N2=Math.pow(b*c,2)+Math.pow(a*c,2)+Math.pow(a*b,2);
+  var dist=(a*b*c)/Math.sqrt(N2);
+  var steps=[
+    {q:'OABC est un tétraèdre avec O(0;0;0), A('+a+';0;0), B(0;'+b+';0), C(0;0;'+c+'). Calculer son volume. (V = 1/3 × base × hauteur)',type:'num',val:V,
+      expl:'Base OAB : aire '+(a*b)+'/2, hauteur OC = '+c+' ⇒ V = '+(a*b*c)+'/6 ≈ '+(+V.toFixed(3))+'.',hint:'Les arêtes OA, OB, OC sont deux à deux orthogonales.',help:'Fraction ou décimal'},
+    {q:'Le vecteur AB a pour coordonnées ?',type:'vec',val:[-a,b,0],expl:'B − A = (−'+a+' ; '+b+' ; 0).',hint:'B − A.',help:'(x;y;z)'},
+    {q:'Calculer le produit scalaire AB · AC.',type:'num',val:a*a,expl:'AB(−'+a+';'+b+';0), AC(−'+a+';0;'+c+') ⇒ AB·AC = '+(a*a)+'.',hint:'Somme des produits.',help:'Un entier'},
+    {q:'Le plan (ABC) a pour équation x/'+a+' + y/'+b+' + z/'+c+' = 1. Une normale est n('+(b*c)+' ; '+(a*c)+' ; '+(a*b)+'). Calculer n·AB.',type:'num',val:0,
+      expl:(-a*b*c)+' + '+(a*b*c)+' + 0 = 0.',hint:'n·AB = −'+a+'×'+(b*c)+' + '+b+'×'+(a*c)+'.',help:'Un entier'},
+    {q:'Distance de O au plan (ABC), arrondie au centième.',type:'num',val:dist,
+      expl:'d = '+(a*b*c)+'/√'+N2+' ≈ '+dist.toFixed(2)+'.',hint:'Plan : '+(b*c)+'x+'+(a*c)+'y+'+(a*b)+'z−'+(a*b*c)+'=0.',help:'Décimal (2 décimales)'}
+  ];
+  return {title:'Le tétraèdre OABC',intro:'Tétraèdre rectangle en O. Explore la scène 3D GeoGebra.',steps:steps,
+    scene:{kind:'tetra',pts:{O:O,A:A,B:B,C:C}}};
+}
+
+/* ================= GEOGEBRA 3D ================= */
+var ggbApp=null;
+function G(p){return '('+p.map(function(x){return +(+x).toFixed(4);}).join(',')+')';}
+
+function disposeScene(){
+  ggbApp=null;
+  var h=document.getElementById('ggb');
+  if(h)h.innerHTML='';
+}
+
+function ggbCommands(sc){
+  var cmds=[],k;
+  if(sc.kind==='cube'){
+    var P={};
+    for(k in CUBE)P[k]=CUBE[k];
+    if(sc.extra){for(k in sc.extra)P[k]=sc.extra[k];}
+    for(k in P)cmds.push(k+'='+G(P[k]));
+    var edges=[['A','B'],['B','C'],['C','D'],['D','A'],['E','F'],['F','G'],['G','H'],['H','E'],['A','E'],['B','F'],['C','G'],['D','H']];
+    edges.forEach(function(e,i){cmds.push('e'+i+'=Segment('+e[0]+','+e[1]+')');});
+    var hl=(sc.hl||[]).filter(function(x){return CUBE[x];});
+    if(hl.length>=3){
+      cmds.push('pl=Polygon('+hl.slice(0,3).join(',')+')');
+      cmds.push('SetColor(pl,"Magenta")');
+      cmds.push('SetFilling(pl,0.35)');
+    }
+    if(sc.line){
+      cmds.push('dr=Line('+G(sc.line.A)+',Vector('+G(sc.line.v)+'))');
+      cmds.push('SetColor(dr,"Orange")');
+      cmds.push('SetLineThickness(dr,5)');
+      /* Flèche du vecteur directeur AG, de l'origine à G */
+      cmds.push('vAG=Vector((0,0,0),'+G(sc.line.v)+')');
+      cmds.push('SetColor(vAG,"Red")');
+      cmds.push('SetLineThickness(vAG,6)');
+    }
+    /* Flèches des vecteurs du plan (1er point vers 2e et 3e points) */
+    if(hl.length>=3){
+      cmds.push('vb1=Vector('+hl[0]+','+hl[1]+')');
+      cmds.push('vb2=Vector('+hl[0]+','+hl[2]+')');
+      cmds.push('SetColor(vb1,"Blue")');
+      cmds.push('SetColor(vb2,"Blue")');
+      cmds.push('SetLineThickness(vb1,5)');
+      cmds.push('SetLineThickness(vb2,5)');
+    }
+    hl.forEach(function(n){cmds.push('SetColor('+n+',"Gold")');});
+    if(sc.extra&&sc.extra.K){
+      cmds.push('SetColor(K,"Red")');
+      cmds.push('SetPointSize(K,6)');
+    }
+  }
+  else if(sc.kind==='tetra'){
+    for(k in sc.pts)cmds.push(k+'='+G(sc.pts[k]));
+    cmds.push('tet=Pyramid(Polygon(O,A,B),C)');
+    cmds.push('SetFilling(tet,0.15)');
+    cmds.push('pABC=Polygon(A,B,C)');
+    cmds.push('SetColor(pABC,"Magenta")');
+    cmds.push('SetFilling(pABC,0.35)');
+    cmds.push('vAB=Vector(A,B)');
+    cmds.push('vAC=Vector(A,C)');
+    cmds.push('SetColor(vAB,"Blue")');
+    cmds.push('SetColor(vAC,"Blue")');
+    cmds.push('SetLineThickness(vAB,5)');
+    cmds.push('SetLineThickness(vAC,5)');
+  }
+  else{
+    for(k in (sc.pts||{}))cmds.push(k+'='+G(sc.pts[k]));
+    (sc.seg||[]).forEach(function(s,i){
+      if(sc.arrow){
+        cmds.push('s'+i+'=Vector('+s[0]+','+s[1]+')');
+        cmds.push('SetColor(s'+i+',"Blue")');
+        cmds.push('SetLineThickness(s'+i+',5)');
+      }else{
+        cmds.push('s'+i+'=Segment('+s[0]+','+s[1]+')');
+      }
+    });
+    if(sc.plane){
+      var n=sc.plane.n,d=sc.plane.d;
+      cmds.push('plan: '+n[0]+'x+'+n[1]+'y+'+n[2]+'z+'+d+'=0');
+      cmds.push('SetColor(plan,"Magenta")');
+      cmds.push('SetFilling(plan,0.3)');
+    }
+    if(sc.line){
+      cmds.push('dr=Line('+G(sc.line.A)+',Vector('+G(sc.line.v)+'))');
+      cmds.push('SetColor(dr,"Orange")');
+      cmds.push('SetLineThickness(dr,5)');
+    }
+  }
+  return cmds;
+}
+function buildScene(host,sc){
+  disposeScene();
+  host.innerHTML='';
+  if(typeof GGBApplet==='undefined'){
+    host.innerHTML='<div style="padding:20px;color:#0f172a">GeoGebra n\'a pas pu être chargé (vérifie ta connexion internet).</div>';
+    return;
+  }
+  var w=host.clientWidth||600,h=host.clientHeight||380;
+  var params={
+    id:'ggbApplet',
+    appName:'3d',
+    width:w,height:h,
+    perspective:'T',
+    showToolBar:false,
+    showAlgebraInput:false,
+    showMenuBar:false,
+    showResetIcon:true,
+    enableRightClick:false,
+    enableLabelDrags:false,
+    enableShiftDragZoom:true,
+    useBrowserForJS:true,
+    appletOnLoad:function(api){
+      ggbApp=api;
+      try{
+        /* Vue 3D seule : pas de fenêtre Algèbre ni de Graphique 2D */
+        api.setPerspective('T');
+        api.setAxesVisible(true,true,true);
+        api.setGridVisible(false);
+
+        ggbCommands(sc).forEach(function(c){api.evalCommand(c);});
+
+        api.getAllObjectNames().forEach(function(n){
+          api.setLabelVisible(n,api.getObjectType(n)==='point');
+        });
+
+        api.evalCommand('ZoomIn(-2,-2,-2,3,3,3)');
+        /* Orientation de la vue 3D (commande valide, sans erreur) */
+        try{ api.evalCommand('SetViewDirection((-1,-1.2,0.8))'); }catch(e2){}
+      }catch(e){console.warn('GeoGebra:',e);}
+    }
+  };
+  var app=new GGBApplet(params,true);
+  app.inject(host.id);
+}
+/* ================= ÉTAT & UI ================= */
+function $(id){return document.getElementById(id);}
+var screen=$('screen');
+var best={};
+try{best=JSON.parse(localStorage.getItem('eqBestGGB')||'{}');}catch(e){best={};}
+var CFG={mode:'classic',input:'qcm',lvl:1};
+var S={};
+
+var LEVELS={
+  1:{name:'Cadet 🛰️',desc:'Vecteurs, milieu, distance'},
+  2:{name:'Pilote 🚀',desc:'Produit scalaire, angles'},
+  3:{name:'Commandant 🪐',desc:'Droites et plans'},
+  4:{name:'Amiral 🌌',desc:'Distances, sphères, normales'},
+  5:{name:'Bac 🎓',desc:'Cube ABCDEFGH, plans, intersections'},
+  6:{name:'Tétraèdre 🔺',desc:'Volume, normale, distance (3D)'}
+};
+
+function menu(){
+  disposeScene();
+  clearInterval(S.tick);
+  var modes=[['classic','🎯 Classique'],['chrono','⏱️ Chrono 60 s'],['duel','⚔️ Duel 2 joueurs']];
+  var inputs=[['qcm','🔘 QCM'],['free','⌨️ Saisie libre']];
+  var h='<div class="card center"><b>Mode de jeu</b><div class="opts">';
+  modes.forEach(function(m){
+    h+='<button class="sec '+(CFG.mode===m[0]?'on':'')+'" data-mode="'+m[0]+'">'+m[1]+'</button>';
+  });
+  h+='</div><b>Type de réponse</b><div class="opts">';
+  inputs.forEach(function(m){
+    h+='<button class="sec '+(CFG.input===m[0]?'on':'')+'" data-input="'+m[0]+'">'+m[1]+'</button>';
+  });
+  h+='</div><small class="k">Les niveaux 5 (Bac) et 6 (Tétraèdre) sont toujours en saisie libre.</small></div>';
+  h+='<div class="levels">';
+  Object.keys(LEVELS).forEach(function(k){
+    var l=LEVELS[k];
+    h+='<button class="lvl" data-lvl="'+k+'"><b>Niveau '+k+' – '+l.name+'</b><small>'+l.desc+'</small><small>🏆 '+(best[k]||0)+' pts</small></button>';
+  });
+  h+='</div>';
+  h+='<div class="card center"><small class="k">Classique : 10 questions, 3 vies • Chrono : 60 s, +5 s par bonne réponse, −3 s par erreur • Duel : les joueurs alternent, le meilleur score gagne • Un indice coûte 5 pts</small></div>';
+  screen.innerHTML=h;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'),function(b){b.onclick=function(){CFG.mode=b.getAttribute('data-mode');menu();};});
+  Array.prototype.forEach.call(document.querySelectorAll('[data-input]'),function(b){b.onclick=function(){CFG.input=b.getAttribute('data-input');menu();};});
+  Array.prototype.forEach.call(document.querySelectorAll('[data-lvl]'),function(b){b.onclick=function(){start(+b.getAttribute('data-lvl'));};});
+}
+
+function start(l){
+  clearInterval(S.tick);
+  CFG.lvl=l;
+  S={lvl:l,mode:CFG.mode,n:0,score:0,lives:3,streak:0,total:10,
+     scores:[0,0],player:0,time:60,answered:false,hint:false,problem:null,step:0,pdone:0};
+  if(l>=5&&S.mode==='chrono')S.mode='classic';
+  if(S.mode==='duel'){S.total=10;S.lives=99;}
+  if(S.mode==='chrono'){
+    S.total=999;S.lives=99;
+    S.tick=setInterval(function(){
+      S.time--;
+      var t=$('timer');
+      if(t)t.textContent='⏱️ '+Math.max(S.time,0)+' s';
+      if(S.time<=0){clearInterval(S.tick);end();}
+    },1000);
+  }
+  next();
+}
+
+function next(){
+  if(S.mode==='classic'&&S.lives<=0)return end();
+  if(S.lvl>=5){
+    if(!S.problem||S.step>=S.problem.steps.length){
+      if(S.problem)S.pdone++;
+      if(S.mode==='duel'&&S.pdone>=2)return end();
+      if(S.mode==='classic'&&S.pdone>=1)return end();
+      S.problem=(S.lvl===5)?BAC():tetra();
+      S.step=0;
+      S.player=(S.mode==='duel')?S.pdone%2:0;
+    }
+    var st=S.problem.steps[S.step];
+    S.cur={q:st.q,ans:{type:st.type,val:st.val},expl:st.expl,hint:st.hint,freeHelp:st.help,scene:S.problem.scene,choices:[],good:''};
+    S.n++;S.answered=false;S.hint=false;
+    return render();
+  }
+  if(S.mode==='classic'&&S.n>=S.total)return end();
+  if(S.mode==='duel'&&S.n>=S.total)return end();
+  var g=GEN[S.lvl];
+  S.cur=g[rnd(0,g.length-1)]();
+  if(CFG.input==='free'&&S.cur.q2)S.cur.q=S.cur.q2;
+  S.n++;S.answered=false;S.hint=false;
+  if(S.mode==='duel')S.player=(S.n-1)%2;
+  render();
+}
+
+function header(){
+  var lv=LEVELS[S.lvl].name;
+  var streak=S.streak>=2?' 🔥x'+S.streak:'';
+  if(S.mode==='duel'){
+    return '<div class="bar"><span>'+lv+'</span><span class="'+(S.player?'p2':'p1')+'">Joueur '+(S.player+1)+' à jouer</span>'+
+      '<span><span class="p1">J1 : '+S.scores[0]+'</span> • <span class="p2">J2 : '+S.scores[1]+'</span></span></div>';
+  }
+  if(S.mode==='chrono'){
+    return '<div class="bar"><span>'+lv+'</span><span class="timer" id="timer">⏱️ '+S.time+' s</span><span style="color:var(--gold)">⭐ '+S.score+streak+'</span></div>';
+  }
+  var hearts='';
+  var i;
+  for(i=0;i<Math.max(S.lives,0);i++)hearts+='❤';
+  for(i=0;i<Math.max(3-S.lives,0);i++)hearts+='♡';
+  return '<div class="bar"><span>'+lv+'</span><span style="color:var(--ko);letter-spacing:3px">'+hearts+'</span><span style="color:var(--gold)">⭐ '+S.score+streak+'</span></div>';
+}
+
+function render(){
+  var c=S.cur;
+  var free=(CFG.input==='free'||S.lvl>=5);
+  var pct;
+  if(S.mode==='chrono')pct=Math.max(0,S.time/60*100);
+  else if(S.lvl>=5)pct=S.step/S.problem.steps.length*100;
+  else pct=(S.n-1)/S.total*100;
+
+  var h='<div class="card">'+header();
+  h+='<div class="prog" style="margin:10px 0"><div style="width:'+pct+'%"></div></div>';
+  if(S.lvl>=5){
+        h+='<div class="step">'+vt(S.problem.title)+' — Question '+(S.step+1)+'/'+S.problem.steps.length+'</div><small class="k">'+vt(S.problem.intro)+'</small>';
+  }else{
+    h+='<small class="k">Question '+S.n+(S.mode==='chrono'?'':'/'+S.total)+'</small>';
+  }
+  if(c.scene){
+    h+='<div id="ggb"></div><small class="k">🖱️ Clic gauche + glisser : tourner • molette : zoom • clic droit + glisser : déplacer la vue</small>';
+  }
+    h+='<div class="q">'+vt(c.q)+'</div>';
+  if(free){
+    h+='<input type="text" id="inp" placeholder="'+(c.freeHelp||'Ta réponse')+'" autocomplete="off">';
+    h+='<div style="margin-top:8px"><button id="ok">Valider</button></div><small class="k">'+(c.freeHelp||'')+'</small>';
+  }else{
+    h+='<div class="choices">';
+    c.choices.forEach(function(x,i){
+            h+='<button class="choice" data-i="'+i+'">'+vt(x)+'</button>';
+    });
+    h+='</div>';
+  }
+  h+='<div style="margin-top:12px"><button class="sec" id="hintb">💡 Indice (−5)</button><button class="sec" id="quit">Quitter</button></div>';
+  h+='<div class="fb" id="fb"></div></div>';
+  screen.innerHTML=h;
+
+  if(c.scene)buildScene($('ggb'),c.scene);
+  $('quit').onclick=menu;
+  $('hintb').onclick=hint;
+  if(free){
+    var inp=$('inp');
+    inp.focus();
+    inp.onkeydown=function(e){if(e.key==='Enter')submitFree();};
+    $('ok').onclick=submitFree;
+  }else{
+    Array.prototype.forEach.call(document.querySelectorAll('.choice'),function(b){
+      b.onclick=function(){submitQcm(+b.getAttribute('data-i'));};
+    });
+  }
+}
+
+function hint(){
+  if(S.answered||S.hint)return;
+  S.hint=true;
+  if(S.mode==='duel')S.scores[S.player]=Math.max(0,S.scores[S.player]-5);
+  else S.score=Math.max(0,S.score-5);
+  var f=$('fb');
+  f.style.display='block';
+    f.innerHTML='💡 '+vt(S.cur.hint);
+}
+
+function gain(good){
+  if(good){
+    S.streak++;
+    var pts=10+Math.min(S.streak-1,5)*2+(S.lvl>=5?5:0);
+    if(S.mode==='duel')S.scores[S.player]+=pts;
+    else S.score+=pts;
+    if(S.mode==='chrono')S.time+=5;
+  }else{
+    S.streak=0;
+    if(S.mode==='classic')S.lives--;
+    if(S.mode==='chrono')S.time=Math.max(0,S.time-3);
+  }
+}
+
+function submitQcm(i){
+  if(S.answered)return;
+  S.answered=true;
+  var c=S.cur;
+  var btns=document.querySelectorAll('.choice');
+  var good=(c.choices[i]===c.good);
+  Array.prototype.forEach.call(btns,function(b,j){
+    if(c.choices[j]===c.good)b.classList.add('ok');
+  });
+  if(!good)btns[i].classList.add('ko');
+  gain(good);
+  feedback(good);
+}
+
+function submitFree(){
+  if(S.answered)return;
+  var inp=$('inp');
+  var v=inp.value.trim();
+  if(!v)return;
+  S.answered=true;
+  inp.disabled=true;
+  var good=(checkFree(S.cur,v)===true);
+  inp.style.borderColor=good?'var(--ok)':'var(--ko)';
+  gain(good);
+  feedback(good);
+}
+
+function feedback(good){
+  var f=$('fb');
+  f.style.display='block';
+  var last=S.mode==='classic'&&(S.lives<=0||(S.lvl<5&&S.n>=S.total));
+   f.innerHTML=(good?'✅ Bravo !':'❌ Raté.')+'<br>'+vt(S.cur.expl)+'<br><br><button id="nx">'+(last?'Résultat':'Suivant →')+'</button>';
+  $('nx').onclick=function(){
+    if(S.lvl>=5)S.step++;
+    next();
+  };
+  if(S.mode==='chrono'&&S.time<=0)end();
+}
+
+function end(){
+  clearInterval(S.tick);
+  disposeScene();
+  var title,sub,medal;
+  var sc=S.mode==='duel'?Math.max(S.scores[0],S.scores[1]):S.score;
+
+  if(S.mode==='duel'){
+    var a=S.scores[0],b=S.scores[1];
+    title=(a===b)?'Égalité !':'Victoire du Joueur '+(a>b?1:2)+' !';
+    sub='<span class="p1">Joueur 1 : '+a+' pts</span> — <span class="p2">Joueur 2 : '+b+' pts</span>';
+    medal=(a===b)?'🤝':'🏆';
+  }else{
+    var win=S.mode==='chrono'||S.lives>0;
+    title=S.mode==='chrono'?'Temps écoulé !':(win?'Mission accomplie !':'Mission échouée…');
+    medal=!win?'💥':(sc>=110?'🥇':(sc>=70?'🥈':(sc>=40?'🥉':'🎯')));
+    sub='Score : <b style="color:var(--gold)">'+sc+'</b> pts';
+  }
+
+  var key=S.lvl;
+  if(S.mode!=='duel'&&sc>(best[key]||0)){
+    best[key]=sc;
+    try{localStorage.setItem('eqBestGGB',JSON.stringify(best));}catch(e){}
+  }
+
+  var html='<div class="card center">';
+  html+='<div class="badge">'+medal+'</div>';
+  html+='<h2>'+title+'</h2>';
+  html+='<p>'+sub+'</p>';
+  if(S.mode!=='duel')html+='<p>Record niveau '+S.lvl+' : '+(best[key]||0)+' pts</p>';
+  html+='<button id="again">Rejouer</button>';
+  if(S.lvl<6)html+='<button id="nextl" class="sec">Niveau suivant</button>';
+  html+='<button id="menub" class="sec">Menu</button>';
+  html+='</div>';
+  screen.innerHTML=html;
+
+    $('again').onclick=function(){start(S.lvl);};
+  if($('nextl'))$('nextl').onclick=function(){start(S.lvl+1);};
+  $('menub').onclick=menu;
+}
+
+menu();
+</script>
+</body>
+</html>
