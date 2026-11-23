@@ -87,18 +87,39 @@ function frac(a,b){
 
 /* Met une flèche au-dessus des vecteurs : AB, BD, AG, u, v, w, n, d ... */
 function vt(s){
-  /* 1) Vecteurs à deux lettres majuscules : AB, BD, BG, AG, AK, BE, AC... */
-  s=s.replace(/(^|[^A-Za-zÀ-ÿ])(A[BCDEGK]|B[DEGC]|AB|AC|AG|AK|BD|BE|BG|OA|OB|OC)(?![A-Za-z0-9])/g,
-    function(m,pre,v){return pre+'<span class="v">'+v+'</span>';});
-  /* 2) Vecteurs en minuscule suivis d'une parenthèse : u(…), v(…), w(…), n(…), d(…) */
+  var V='(?:AB|AC|AD|AE|AG|AK|BD|BE|BG|BC|OA|OB|OC)';
+  var wrap=function(v){return '<span class="v">'+v+'</span>';};
+
+  /* 1) « vecteur AB », « vecteurs AB et AC » : flèche après le mot vecteur */
+  s=s.replace(new RegExp('(vecteurs?\\s+)('+V+')(\\s+et\\s+)?('+V+')?','g'),
+    function(m,mot,v1,et,v2){
+      return mot+wrap(v1)+(et||'')+(v2?wrap(v2):'');
+    });
+
+  /* 2) Vecteur suivi de ses coordonnées : BD(−1;1;0), AB(−2;3;0) */
+  s=s.replace(new RegExp('(^|[^A-Za-z])('+V+')(?=\\s*\\()','g'),
+    function(m,pre,v){return pre+wrap(v);});
+
+  /* 3) Vecteur dans un produit scalaire : AG · BD, n·AB, AB·AC */
+  s=s.replace(new RegExp('('+V+')(?=\\s*[·∧])','g'),function(m,v){return wrap(v);});
+  s=s.replace(new RegExp('([·∧]\\s*)('+V+')(?![A-Za-z0-9])','g'),
+    function(m,op,v){return op+wrap(v);});
+
+  /* 4) Vecteurs en minuscule : u(…), v(…), w(…), n(…), d(…) */
   s=s.replace(/(^|[\s,;:«])([uvwnd])(?=\s*\()/g,
-    function(m,pre,v){return pre+'<span class="v">'+v+'</span>';});
-  /* 3) Vecteurs en minuscule isolés dans des formules : u·v, n·AB, d·n, u∧v */
-  s=s.replace(/([uvwnd])(?=\s*[·∧])/g,'<span class="v">$1</span>');
-  s=s.replace(/([·∧]\s*)([uvwnd])(?![A-Za-z(])/g,'$1<span class="v">$2</span>');
+    function(m,pre,v){return pre+wrap(v);});
+
+  /* 5) Minuscules dans les produits : u·v, d·n, u∧v */
+  s=s.replace(/([uvwnd])(?=\s*[·∧])/g,wrap('$1'));
+  s=s.replace(/([·∧]\s*)([uvwnd])(?![A-Za-z(])/g,'$1'+wrap('$2'));
+
+  /* 6) Cas particuliers du jeu */
+  s=s.replace(/(coordonnées du )(AB)( a pour)/g,'$1'+wrap('AB')+'$3');
+  s=s.replace(/(Le )(AB)( a pour coordonnées)/g,'$1'+wrap('AB')+'$3');
+  s=s.replace(/(^|[^A-Za-z])(AB|AC|AG|BD|BG|BE)( =  ?\()/g,
+    function(m,pre,v,rest){return pre+wrap(v)+rest;});
   return s;
 }
-
 /* ====== Analyse des réponses libres ====== */
 function parseNum(s){
   s=String(s).toLowerCase().replace(/\s+/g,'').replace(/,/g,'.').replace(/−/g,'-')
