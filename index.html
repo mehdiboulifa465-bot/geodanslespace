@@ -90,17 +90,24 @@ function vt(s){
   var V='(?:AB|AC|AD|AE|AG|AK|BD|BE|BG|BC|OA|OB|OC)';
   var wrap=function(v){return '<span class="v">'+v+'</span>';};
 
-  /* 1) « vecteur AB », « vecteurs AB et AC » : flèche après le mot vecteur */
+  /* 0) PROTECTION : les segments [AB], [BD]... ne reçoivent jamais de flèche */
+  var seg=[];
+  s=s.replace(/\[[A-Z]{2}\]/g,function(m){
+    seg.push(m);
+    return '@@SEG'+(seg.length-1)+'@@';
+  });
+
+  /* 1) « vecteur AB », « vecteurs AB et AC » */
   s=s.replace(new RegExp('(vecteurs?\\s+)('+V+')(\\s+et\\s+)?('+V+')?','g'),
     function(m,mot,v1,et,v2){
       return mot+wrap(v1)+(et||'')+(v2?wrap(v2):'');
     });
 
-  /* 2) Vecteur suivi de ses coordonnées : BD(−1;1;0), AB(−2;3;0) */
+  /* 2) Vecteur suivi de ses coordonnées : BD(−1;1;0) */
   s=s.replace(new RegExp('(^|[^A-Za-z])('+V+')(?=\\s*\\()','g'),
     function(m,pre,v){return pre+wrap(v);});
 
-  /* 3) Vecteur dans un produit scalaire : AG · BD, n·AB, AB·AC */
+  /* 3) Vecteur dans un produit scalaire : AG · BD, n·AB */
   s=s.replace(new RegExp('('+V+')(?=\\s*[·∧])','g'),function(m,v){return wrap(v);});
   s=s.replace(new RegExp('([·∧]\\s*)('+V+')(?![A-Za-z0-9])','g'),
     function(m,op,v){return op+wrap(v);});
@@ -110,17 +117,18 @@ function vt(s){
     function(m,pre,v){return pre+wrap(v);});
 
   /* 5) Minuscules dans les produits : u·v, d·n, u∧v */
-  s=s.replace(/([uvwnd])(?=\s*[·∧])/g,wrap('$1'));
-  s=s.replace(/([·∧]\s*)([uvwnd])(?![A-Za-z(])/g,'$1'+wrap('$2'));
+  s=s.replace(/([uvwnd])(?=\s*[·∧])/g,function(m,v){return wrap(v);});
+  s=s.replace(/([·∧]\s*)([uvwnd])(?![A-Za-z(])/g,
+    function(m,op,v){return op+wrap(v);});
 
-  /* 6) Cas particuliers du jeu */
-  s=s.replace(/(coordonnées du )(AB)( a pour)/g,'$1'+wrap('AB')+'$3');
-  s=s.replace(/(Le )(AB)( a pour coordonnées)/g,'$1'+wrap('AB')+'$3');
-  s=s.replace(/(^|[^A-Za-z])(AB|AC|AG|BD|BG|BE)( =  ?\()/g,
+  /* 6) Cas particuliers : AB = (...) */
+  s=s.replace(/(^|[^A-Za-z])(AB|AC|AG|BD|BG|BE)( = ?\()/g,
     function(m,pre,v,rest){return pre+wrap(v)+rest;});
+
+  /* 7) RESTAURATION des segments [AB] sans flèche */
+  s=s.replace(/@@SEG(\d+)@@/g,function(m,i){return seg[+i];});
   return s;
-}
-/* ====== Analyse des réponses libres ====== */
+}/* ====== Analyse des réponses libres ====== */
 function parseNum(s){
   s=String(s).toLowerCase().replace(/\s+/g,'').replace(/,/g,'.').replace(/−/g,'-')
     .replace(/×|·/g,'*')
